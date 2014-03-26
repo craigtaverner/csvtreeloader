@@ -43,7 +43,7 @@ public class CSVTreeLoaderServiceTest {
 		db.shutdown();
 	}
 
-	private void makeSampleCSV(String filename) throws IOException {
+	private String[] makeSampleCSV(String filename) throws IOException {
 		String[] sample = new String[] {
 				"DeviceID,Day,Date",
 				"ABC,2014-03-20,2014-03-20T12:00:00",
@@ -52,7 +52,8 @@ public class CSVTreeLoaderServiceTest {
 				"ABC,2014-03-22,2014-03-22T12:30:00",
 				"ABX,2014-03-20,2014-03-20T12:30:00",
 				"ABX,2014-03-21,2014-03-21T12:30:00",
-				"ABC,2014-03-20,2014-03-20T12:45:00"
+				"ABC,2014-03-20,2014-03-20T12:45:00",
+				"ABC,2014-03-20,2014-03-20T12:00:00"
 		};
 		PrintWriter out = new PrintWriter(filename);
 		for (String line : sample) {
@@ -60,6 +61,7 @@ public class CSVTreeLoaderServiceTest {
 			out.println(line);
 		}
 		out.close();
+		return sample;
 	}
 
 	/**
@@ -194,7 +196,7 @@ public class CSVTreeLoaderServiceTest {
 	public void shouldBuildCorrectBuilders() throws IOException {
 		CSVTreeLoaderService.verbose = true;
 		String filename = "/tmp/csvtreeloaderservicetest.csv";
-		makeSampleCSV(filename);
+		String[] sample = makeSampleCSV(filename);
 		String[] parentColumnHeaders = new String[] { "DeviceID", "Day..EventDay", "Date.time.Event" };
 		String[] fullColumnHeaders = new String[] { "DeviceID.deviceid.DeviceID", "Day.day.EventDay", "Date.time.Event" };
 		CSVTreeBuilder builder = new CSVTreeBuilder(filename, parentColumnHeaders, null, null, db);
@@ -221,7 +223,8 @@ public class CSVTreeLoaderServiceTest {
 			// And test the contents of the builder now
 			assertEquals(2, ((RootTreeNodeBuilder) builder.treeNodes.get(0)).cachedRoots.size());
 			assertEquals("ABC", builder.treeNodes.get(0).currentNode.getProperty("deviceid"));
-			assertEquals("2014-03-20T12:45:00", builder.treeNodes.get(2).currentNode.getProperty("time"));
+			String lastDate = sample[sample.length-1].split(",")[2];
+			assertEquals(lastDate, builder.treeNodes.get(2).currentNode.getProperty("time"));
 
 			// And test the graph, first by checking the right number of root nodes
 			ExecutionEngine engine = new ExecutionEngine(db);;
