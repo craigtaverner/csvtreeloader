@@ -123,8 +123,8 @@ public class CSVTreeLoaderServiceTest {
 	 * @param engine
 	 *            The ExecutionEngine to perform the Cypher query with
 	 */
-	private void runDeviceDayCheck(Map<String,Integer> expectedDays, ExecutionEngine engine) {
-		String query = "MATCH (n:DeviceID)-[:child]->(d:EventDay) RETURN n.deviceid as deviceid, d.day as day";
+	private void runDeviceDayCheck(String rootLabel, Map<String,Integer> expectedDays, ExecutionEngine engine) {
+		String query = "MATCH (n:" + rootLabel + ")-[*]->(d:EventDay) RETURN n.deviceid as deviceid, d.day as day";
 		ExecutionResult results = engine.execute(query);
 		ACollections.IncMap<String> resultsMap = new ACollections.IncMap<String>();
 		ACollections.IncMap<String> dayCounts = new ACollections.IncMap<String>();
@@ -242,7 +242,7 @@ public class CSVTreeLoaderServiceTest {
 			HashMap<String, Integer> expectedDays = new HashMap<String, Integer>();
 			expectedDays.put("ABC", 3);
 			expectedDays.put("ABX", 2);
-			runDeviceDayCheck(expectedDays, engine);
+			runDeviceDayCheck("DeviceID", expectedDays, engine);
 			
 			// Now test that the specific deviceid and date has the correct number of leaf nodes
 			runEventMatchCheck("ABX", "2014-03-20", new String[] { "2014-03-20T12:30:00" }, engine);
@@ -256,7 +256,7 @@ public class CSVTreeLoaderServiceTest {
 		}
 	}
 
-	private void testTreeGraph(Object... args) {
+	private void testTreeGraph(String rootLabel, String[] leafProperties, Object... args) {
 		HashMap<String, Integer> expectedDays = new HashMap<String, Integer>();
 		for (int i = 0; i < args.length - 1; i += 2) {
 			expectedDays.put((String) args[i], (Integer) args[i + 1]);
@@ -265,22 +265,32 @@ public class CSVTreeLoaderServiceTest {
 			ExecutionEngine engine = new ExecutionEngine(db);
 			// Now test that there are never duplicate date nodes, and that days
 			// counts are correct
-			runDeviceDayCheck(expectedDays, engine);
-			runLeafPropertiesCheck("DeviceID", 3, new String[] { "time", "utc", "path", "deviceid", "name", "version",
-					"platform", "model", "os" }, engine);
+			runDeviceDayCheck(rootLabel, expectedDays, engine);
+			runLeafPropertiesCheck(rootLabel, 3, leafProperties, engine);
 			tx.success();
 		}
 	}
 
-	private Response runDeviceConfigCSVImport(String path) {
-		return runDeviceConfigCSVImport(path,0,0,true);
+	private Response runDeviceConfigCSVImport(String path, String[] spec, String[] leaf) {
+		return runDeviceConfigCSVImport(path, spec, leaf, 0, 0, true);
 	}
+	
+	//DeviceID        Device NodeID   Day     Day NodeID      Path    Date    UTC     Params
+	private static final String[] OLDER_SPEC = new String[] { "DeviceID", "Day..EventDay", "Date.time.Event" };
+	private static final String[] OLDER_LEAF = new String[] { "Date.time", "Path", "UTC" };
+	private static final String[] OLDER_LEAF_PROPS = new String[] { "time", "utc", "path", "deviceid", "name", "version",
+		"platform", "model", "os" };
 
-	private Response runDeviceConfigCSVImport(String path, long skip, long limit, boolean debug) {
+	//Device	Version	Version Props	Day	Date	UTC	Params
+	private static final String[] NEWER_SPEC = new String[] { "Device.deviceid..versions", "Version.version_name.GeoptimaVersion.days.Version%20Props", "Day..EventDay.checks", "Date.time.GeoptimaEvent" };
+	private static final String[] NEWER_LEAF = new String[] { "Date.time", "UTC" };
+	private static final String[] NEWER_LEAF_PROPS = new String[] { "deviceid", "mcc", "mnc", "eula", "lc"};
+
+	private Response runDeviceConfigCSVImport(String path, String[] spec, String[] leaf, long skip, long limit, boolean debug) {
 		Response response = service.importCSV(
 				path,
-				new ACollections.ArrayList<String>(new String[] { "DeviceID", "Day..EventDay", "Date.time.Event" }),
-				new ACollections.ArrayList<String>(new String[] { "Date.time", "Path", "UTC" }),
+				new ACollections.ArrayList<String>(spec),
+				new ACollections.ArrayList<String>(leaf),
 				"Params",
 				skip,
 				limit,
@@ -291,23 +301,33 @@ public class CSVTreeLoaderServiceTest {
 	}
 	
 	@Test
-	public void shouldImportFromCSV() throws IOException {
+	public void shouldImportFromOlderCSV() throws IOException {
 		CSVTreeLoaderService.verbose = false;
-		Response response = runDeviceConfigCSVImport("samples/353333333333333.csv");
+		Response response = runDeviceConfigCSVImport("samples/353333333333333.csv", OLDER_SPEC, OLDER_LEAF);
 		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
-		testTreeGraph("353333333333333", 3);
+		testTreeGraph("DeviceID", OLDER_LEAF_PROPS, "353333333333333", 3);
 		int count = tree.get("count").asInt();
 		assertEquals(122, count);
+	}
+
+	@Test
+	public void shouldImportFromNewerCSV() throws IOException {
+		CSVTreeLoaderService.verbose = false;
+		Response response = runDeviceConfigCSVImport("samples/353222222222222.csv", NEWER_SPEC, NEWER_LEAF);
+		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
+		testTreeGraph("Device", NEWER_LEAF_PROPS, "353222222222222", 6);
+		int count = tree.get("count").asInt();
+		assertEquals(93, count);
 	}
 
 //	@Test
 	public void shouldImportLargeCSV() throws IOException {
 		//CSVTreeLoaderService.verbose = true;
 		long start = System.currentTimeMillis();
-		Response response = runDeviceConfigCSVImport("samples/load_config_access.csv", 0, 0, true);
+		Response response = runDeviceConfigCSVImport("samples/load_config_access.csv", OLDER_SPEC, OLDER_LEAF, 0, 0, true);
 		System.out.println("Imported in " + (System.currentTimeMillis() - start) + "ms");
 		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
-		testTreeGraph("358086051664420", 3, "358086051664420", 1);
+		testTreeGraph("DeviceID", OLDER_LEAF_PROPS, "358086051664420", 3, "358086051664420", 1);
 		int count = tree.get("count").asInt();
 		System.out.println("Finished large CSV test in " + (System.currentTimeMillis() - start) + "ms");
 		assertEquals(367823, count);

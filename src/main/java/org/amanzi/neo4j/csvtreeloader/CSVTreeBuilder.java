@@ -2,6 +2,8 @@ package org.amanzi.neo4j.csvtreeloader;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -101,7 +103,7 @@ class CSVTreeBuilder {
 	}
 
 	private void initializeColumns(List<String> columnHeaders, List<String> leafProperties,
-			String leafPropertiesColumn, GraphDatabaseService db) {
+			String leafPropertiesColumn, GraphDatabaseService db) throws UnsupportedEncodingException {
 		TreeNodeBuilder lastBuilder = null;
 		this.db = db;
 		for (String columnHeader : columnHeaders) {
@@ -133,9 +135,11 @@ class CSVTreeBuilder {
 			for (int i = 0; i < level; i++) {
 				prefix += "    ";
 			}
-			out.println(prefix + node.getProperty(builder.column.property));
+			Iterator<Label> labelIterator = node.getLabels().iterator();
+			String label = labelIterator.hasNext() ? labelIterator.next().name() : "Node";
+			out.println(prefix + label + ": " + node.getProperty(builder.column.property));
 			for (Relationship rel : node
-					.getRelationships(Direction.OUTGOING, DynamicRelationshipType.withName("child"))) {
+					.getRelationships(Direction.OUTGOING, builder.column.child)) {
 				dumpTree(rel.getEndNode(), builder.childBuilder, level + 1);
 			}
 			tx.success();
@@ -146,8 +150,9 @@ class CSVTreeBuilder {
 		if (out != null) {
 			RootTreeNodeBuilder rootBuilder = (RootTreeNodeBuilder)this.treeNodes.get(0);
 			int count = 0;
-			System.out.println("Displaying tree graphs for " + (maxRoots > 0 ? maxRoots : "all") + " of "
-					+ rootBuilder.cachedRoots.size() + " known roots");
+			int knownRoots = rootBuilder.cachedRoots.size();
+			System.out.println("Displaying tree graphs for " + (maxRoots >= knownRoots ? "all" : maxRoots) + " of "
+					+ knownRoots + " known roots");
 			for(Entry<String, Node> entry: rootBuilder.cachedRoots.entrySet()) {
 				if(maxRoots> 0 && count > maxRoots) {
 					break;
@@ -216,16 +221,23 @@ class CSVTreeBuilder {
 	static class ColumnSpec {
 		String name;
 		String property;
+		String properties;
 		Label label;
-		public ColumnSpec(String columnSpec) {
+		RelationshipType child;
+		public static final String DEFAULT_CHILD = "child";
+
+		public ColumnSpec(String columnSpec) throws UnsupportedEncodingException {
 			String[] headerSpec = columnSpec.split("\\.");
 			this.name = headerSpec[0];
-			this.property =
-					(headerSpec.length > 1 && headerSpec[1].length() > 0) ? headerSpec[1] : this.name
-							.toLowerCase().replaceAll("\\s+", "_");
-			String labelName = (headerSpec.length > 2 && headerSpec[2].length() > 0) ? headerSpec[2] : StringUtils
-					.capitalize(this.name).replaceAll("\\s+", "");
-			this.label = DynamicLabel.label(labelName);
+			this.property = field(headerSpec, 1, this.name.toLowerCase().replaceAll("\\s+", "_"));
+			String defaultLabelName = StringUtils.capitalize(this.name).replaceAll("\\s+", "");
+			this.label = DynamicLabel.label(field(headerSpec, 2, defaultLabelName));
+			this.child = DynamicRelationshipType.withName(field(headerSpec, 3, DEFAULT_CHILD));
+			this.properties = field(headerSpec, 4, null);
+		}
+
+		private String field(String[] headerSpec, int index, String defaultValue) throws UnsupportedEncodingException {
+			return (headerSpec.length > index && headerSpec[index].length() > 0) ? URLDecoder.decode(headerSpec[index],"US-ASCII") : defaultValue;
 		}
 	}
 
@@ -240,12 +252,11 @@ class CSVTreeBuilder {
 		protected TreeNodeBuilder childBuilder;
 		protected Node currentNode;
 		protected HashMap<String,Node> currentChildren = new HashMap<String,Node>();
-		public static final RelationshipType childRelType = DynamicRelationshipType.withName("child");
 		protected GraphDatabaseService db;
 		private List<ColumnSpec> properties = new ArrayList<ColumnSpec>();
 		private String propertiesColumn;
 
-		public static TreeNodeBuilder makeFor(String columnSpec, TreeNodeBuilder parentBuilder, GraphDatabaseService db) {
+		public static TreeNodeBuilder makeFor(String columnSpec, TreeNodeBuilder parentBuilder, GraphDatabaseService db) throws UnsupportedEncodingException {
 			if (parentBuilder == null) {
 				return new RootTreeNodeBuilder(columnSpec, db);
 			} else {
@@ -253,7 +264,7 @@ class CSVTreeBuilder {
 			}
 		}
 
-		public void addProperties(List<String> propertiesSpecs, String propertiesColumn) {
+		public void addProperties(List<String> propertiesSpecs, String propertiesColumn) throws UnsupportedEncodingException {
 			if (propertiesSpecs != null) {
 				for (String propSpec : propertiesSpecs) {
 					this.properties.add(new ColumnSpec(propSpec));
@@ -262,7 +273,7 @@ class CSVTreeBuilder {
 			this.propertiesColumn = propertiesColumn;
 		}
 
-		private TreeNodeBuilder(String columnHeader, TreeNodeBuilder parentBuilder) {
+		private TreeNodeBuilder(String columnHeader, TreeNodeBuilder parentBuilder) throws UnsupportedEncodingException {
 			this.column = new ColumnSpec(columnHeader);
 			if (parentBuilder != null) {
 				this.db = parentBuilder.db;
@@ -281,7 +292,7 @@ class CSVTreeBuilder {
 
 		protected Node findChild(String childProperty, String propertyValue) {
 			if (currentChildren.size() == 0) {
-				for (Relationship rel : currentNode.getRelationships(Direction.OUTGOING, childRelType)) {
+				for (Relationship rel : currentNode.getRelationships(Direction.OUTGOING, column.child)) {
 					Node child = rel.getEndNode();
 					currentChildren.put((String) child.getProperty(childProperty), child);
 				}
@@ -295,17 +306,17 @@ class CSVTreeBuilder {
 
 		protected void addPropertiesColumnToNode(Node node, String columnContent) {
 			try {
-				JsonNode tree = new ObjectMapper().readTree(columnContent);
+				JsonNode tree = new ObjectMapper().readTree(columnContent.replaceAll("\\=\\>", ":"));
 				Iterator<String> fieldNames = tree.getFieldNames();
 				while (fieldNames.hasNext()) {
 					String name = fieldNames.next();
 					node.setProperty(name, tree.get(name).toString());
 				}
 			} catch (JsonProcessingException e) {
-				System.out.println("Failed to parse properties column as JSON: " + e);
+				System.out.println("Failed to parse properties column '" + columnContent + "' as JSON: " + e);
 				e.printStackTrace();
 			} catch (IOException e) {
-				System.out.println("Error parsing properties column: " + e);
+				System.out.println("Error parsing properties column '" + columnContent + "': " + e);
 				e.printStackTrace();
 			}
 		}
@@ -318,11 +329,16 @@ class CSVTreeBuilder {
 				for (ColumnSpec prop : properties) {
 					node.setProperty(prop.property, record.get(prop.name));
 				}
+				// Add all properties in the column spec for a multi-property column
+				if (this.column.properties != null) {
+					addPropertiesColumnToNode(node, record.get(this.column.properties));
+				}
+				// Add all properties in the leaf-specific column spec
 				if (this.propertiesColumn != null) {
 					addPropertiesColumnToNode(node, record.get(this.propertiesColumn));
 				}
 				if (parentBuilder != null) {
-					parentBuilder.currentNode.createRelationshipTo(node, childRelType);
+					parentBuilder.currentNode.createRelationshipTo(node, parentBuilder.column.child);
 				}
 			}
 			return node;
@@ -360,7 +376,7 @@ class CSVTreeBuilder {
 		private Map<String, Object> parameters = new HashMap<String, Object>();
 		protected HashMap<String, Node> cachedRoots = new HashMap<String, Node>();
 
-		private RootTreeNodeBuilder(String columnSpec, GraphDatabaseService db) {
+		private RootTreeNodeBuilder(String columnSpec, GraphDatabaseService db) throws UnsupportedEncodingException {
 			super(columnSpec, null);
 			this.db = db;
 			try (Transaction tx = db.beginTx()) {
