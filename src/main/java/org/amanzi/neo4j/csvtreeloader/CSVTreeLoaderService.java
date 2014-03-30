@@ -2,6 +2,7 @@ package org.amanzi.neo4j.csvtreeloader;
 
 import org.codehaus.jackson.map.ObjectMapper;
 import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.server.logging.Logger;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -57,6 +58,8 @@ import java.util.HashMap;
 @Path("/service")
 public class CSVTreeLoaderService {
 
+	public static final Logger logger = Logger.getLogger(CSVTreeLoaderService.class);
+	
 	public static boolean verbose = false;
 
 	/**
@@ -96,7 +99,8 @@ public class CSVTreeLoaderService {
 			@QueryParam(value = "debug") Boolean debug,
 			@Context GraphDatabaseService db) {
 		try {
-		        if (debug == null) debug = false;
+			logger.info("Processing 'loadcsvtree' request: path=%s", path);
+			if (debug == null) debug = false;
 			CSVTreeBuilder builder = new CSVTreeBuilder(path, headers, leafProperties, leafPropertiesColumn, db);
 			builder.setPage(skip, limit);
 			if (debug) builder.setLogger(System.out);
@@ -105,6 +109,7 @@ public class CSVTreeLoaderService {
 			if (debug) builder.dumpTrees(10);
 			return Response.ok().entity(new ObjectMapper().writeValueAsString(response)).build();
 		} catch (IOException e) {
+			logger.error("Error processing 'loadcsvtree' request: path=%s: %s", path, e.getMessage());
 			return Response.status(404).entity(e.getMessage()).build();
 		}
 	}

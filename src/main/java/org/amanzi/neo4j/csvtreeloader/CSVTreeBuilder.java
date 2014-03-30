@@ -304,13 +304,19 @@ class CSVTreeBuilder {
 			return currentChildren.put(propertyValue, child);
 		}
 
-		protected void addPropertiesColumnToNode(Node node, String columnContent) {
+		protected void addPropertiesColumnToNode(Node node, Map<String, String> record, String columnName) {
+			String columnContent = record.get(columnName);
 			try {
-				JsonNode tree = new ObjectMapper().readTree(columnContent.replaceAll("\\=\\>", ":"));
-				Iterator<String> fieldNames = tree.getFieldNames();
-				while (fieldNames.hasNext()) {
-					String name = fieldNames.next();
-					node.setProperty(name, tree.get(name).toString());
+				if (columnContent != null) {
+					JsonNode tree = new ObjectMapper().readTree(columnContent.replaceAll("\\=\\>", ":"));
+					Iterator<String> fieldNames = tree.getFieldNames();
+					while (fieldNames.hasNext()) {
+						String name = fieldNames.next();
+						node.setProperty(name, tree.get(name).toString());
+					}
+				} else {
+					CSVTreeLoaderService.logger.error("No properties column found for '%s'", columnName);
+					throw new IOException("Invalid column specification");
 				}
 			} catch (JsonProcessingException e) {
 				System.out.println("Failed to parse properties column '" + columnContent + "' as JSON: " + e);
@@ -331,11 +337,11 @@ class CSVTreeBuilder {
 				}
 				// Add all properties in the column spec for a multi-property column
 				if (this.column.properties != null) {
-					addPropertiesColumnToNode(node, record.get(this.column.properties));
+					addPropertiesColumnToNode(node, record, this.column.properties);
 				}
 				// Add all properties in the leaf-specific column spec
 				if (this.propertiesColumn != null) {
-					addPropertiesColumnToNode(node, record.get(this.propertiesColumn));
+					addPropertiesColumnToNode(node, record, this.propertiesColumn);
 				}
 				if (parentBuilder != null) {
 					parentBuilder.currentNode.createRelationshipTo(node, parentBuilder.column.child);
