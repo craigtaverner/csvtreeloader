@@ -33,7 +33,7 @@ public class CSVTreeLoaderServiceFunctionalTest {
 		RestRequest restRequest = new RestRequest(server.baseUri().resolve(MOUNT_POINT), CLIENT);
 		importFromCSV(restRequest, "non-existant.csv", columnHeaders, leafProperties, leafPropertiesColumn, 404, 0);
 		importFromCSV(restRequest, "samples/353333333333333.csv", columnHeaders, leafProperties, leafPropertiesColumn, 200, 122);
-		importFromCSV(restRequest, "samples/load_config_access.csv", columnHeaders, leafProperties, leafPropertiesColumn, 200, 1000);
+		//importFromCSV(restRequest, "samples/load_config_access.csv", columnHeaders, leafProperties, leafPropertiesColumn, 200, 1000);
 		server.stop();
 	}
 
