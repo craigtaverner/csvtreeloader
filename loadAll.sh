@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SERVICE="http://localhost:7474/ext/service/loadcsvtree"
-HEADERS="header=Device.deviceid..versions&header=Version.version_name.GeoptimaVersion.days.Version%20Props&header=Day..EventDay.checks&header=Date.time.GeoptimaEvent&leafProperty=Date.time"
+HEADERS="header=Device.deviceid..versions&header=Version.version_name.GeoptimaVersion.days.Version%20Props&header=Day..EventDay.checks&header=Date.time.ConfigCheck&leafProperty=Date.time"
 LEAF="leafProperty=UTC&leafProperties=Params"
 BASE="$(pwd)/csv"
 
