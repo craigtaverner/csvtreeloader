@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.amanzi.neo4j</groupId>
   <artifactId>csvtreeloader</artifactId>
-  <version>0.0.2-SNAPSHOT</version>
+  <version>0.0.3-SNAPSHOT</version>
   <name>Neo4j Server CSV to Tree Builder</name>
   <description>Generic Loader for building tree structures from CSV files within Neo4j Server Unmanaged Extensions</description>
 

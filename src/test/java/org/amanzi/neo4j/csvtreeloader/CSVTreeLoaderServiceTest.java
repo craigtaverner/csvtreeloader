@@ -271,8 +271,8 @@ public class CSVTreeLoaderServiceTest {
 		}
 	}
 
-	private Response runDeviceConfigCSVImport(String path, String[] spec, String[] leaf) {
-		return runDeviceConfigCSVImport(path, spec, leaf, 0, 0, true);
+	private Response runDeviceConfigCSVImport(String path, String[] spec, String[] leaf, String leafProperties) {
+		return runCSVImport(path, spec, leaf, leafProperties, 0, 0, true);
 	}
 	
 	//DeviceID        Device NodeID   Day     Day NodeID      Path    Date    UTC     Params
@@ -286,12 +286,22 @@ public class CSVTreeLoaderServiceTest {
 	private static final String[] NEWER_LEAF = new String[] { "Date.time", "UTC" };
 	private static final String[] NEWER_LEAF_PROPS = new String[] { "deviceid", "mcc", "mnc", "eula", "lc"};
 
-	private Response runDeviceConfigCSVImport(String path, String[] spec, String[] leaf, long skip, long limit, boolean debug) {
+	//Device	Version	Version Props	Day	Date	UTC	Params
+	private static final String[] VALIDATION_SPEC = new String[] {
+		  "Device.deviceid..versions.DeviceData",
+		  "Version.version_name.GeoptimaVersion.days.VersionData",
+		  "Day..EventDay.uploads",
+		  "UploadFile.upload_file...FileData"
+	};
+	private static final String[] VALIDATION_LEAF = new String[] { "Errors" };
+	private static final String[] VALIDATION_LEAF_PROPS = new String[] { "first", "last", "upload_server", "upload_client", "carrier", "mcc", "mnc"};
+
+	private Response runCSVImport(String path, String[] spec, String[] leaf, String leafProperties, long skip, long limit, boolean debug) {
 		Response response = service.importCSV(
 				path,
 				new ACollections.ArrayList<String>(spec),
 				new ACollections.ArrayList<String>(leaf),
-				"Params",
+				leafProperties,
 				skip,
 				limit,
 				debug,
@@ -303,7 +313,7 @@ public class CSVTreeLoaderServiceTest {
 	@Test
 	public void shouldImportFromOlderCSV() throws IOException {
 		CSVTreeLoaderService.verbose = false;
-		Response response = runDeviceConfigCSVImport("samples/353333333333333.csv", OLDER_SPEC, OLDER_LEAF);
+		Response response = runDeviceConfigCSVImport("samples/353333333333333.csv", OLDER_SPEC, OLDER_LEAF, "Params");
 		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
 		testTreeGraph("DeviceID", OLDER_LEAF_PROPS, "353333333333333", 3);
 		int count = tree.get("count").asInt();
@@ -313,18 +323,28 @@ public class CSVTreeLoaderServiceTest {
 	@Test
 	public void shouldImportFromNewerCSV() throws IOException {
 		CSVTreeLoaderService.verbose = false;
-		Response response = runDeviceConfigCSVImport("samples/353222222222222.csv", NEWER_SPEC, NEWER_LEAF);
+		Response response = runDeviceConfigCSVImport("samples/353222222222222.csv", NEWER_SPEC, NEWER_LEAF, "Params");
 		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
 		testTreeGraph("Device", NEWER_LEAF_PROPS, "353222222222222", 6);
 		int count = tree.get("count").asInt();
 		assertEquals(93, count);
 	}
 
+	@Test
+	public void shouldImportFromValidationCSV() throws IOException {
+		CSVTreeLoaderService.verbose = false;
+		Response response = runDeviceConfigCSVImport("samples/validation.csv", VALIDATION_SPEC, VALIDATION_LEAF, null);
+		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
+		testTreeGraph("Device", VALIDATION_LEAF_PROPS, "350000000000010", 2, "350000000000013", 2);
+		int count = tree.get("count").asInt();
+		assertEquals(96, count);
+	}
+
 //	@Test
 	public void shouldImportLargeCSV() throws IOException {
 		//CSVTreeLoaderService.verbose = true;
 		long start = System.currentTimeMillis();
-		Response response = runDeviceConfigCSVImport("samples/load_config_access.csv", OLDER_SPEC, OLDER_LEAF, 0, 0, true);
+		Response response = runCSVImport("samples/load_config_access.csv", OLDER_SPEC, OLDER_LEAF, "Params", 0, 0, true);
 		System.out.println("Imported in " + (System.currentTimeMillis() - start) + "ms");
 		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
 		testTreeGraph("DeviceID", OLDER_LEAF_PROPS, "358086051664420", 3, "358086051664420", 1);

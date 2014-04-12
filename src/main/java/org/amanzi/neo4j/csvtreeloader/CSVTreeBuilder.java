@@ -7,6 +7,7 @@ import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -252,6 +253,7 @@ class CSVTreeBuilder {
 		protected TreeNodeBuilder childBuilder;
 		protected Node currentNode;
 		protected HashMap<String,Node> currentChildren = new HashMap<String,Node>();
+		protected HashSet<String> mergedChildren = new HashSet<String>();
 		protected GraphDatabaseService db;
 		private List<ColumnSpec> properties = new ArrayList<ColumnSpec>();
 		private String propertiesColumn;
@@ -287,6 +289,7 @@ class CSVTreeBuilder {
 				this.childBuilder.clearCurrentNode();
 			}
 			this.currentChildren.clear();
+			this.mergedChildren.clear();
 			this.currentNode = null;
 		}
 
@@ -301,6 +304,7 @@ class CSVTreeBuilder {
 		}
 
 		protected Node addChild(Node child, String propertyValue) {
+			currentNode.createRelationshipTo(child, column.child);
 			return currentChildren.put(propertyValue, child);
 		}
 
@@ -312,11 +316,12 @@ class CSVTreeBuilder {
 					Iterator<String> fieldNames = tree.getFieldNames();
 					while (fieldNames.hasNext()) {
 						String name = fieldNames.next();
-						node.setProperty(name, tree.get(name).toString());
+						setStringProperty(node, name, tree.get(name).toString());
 					}
 				} else {
-					CSVTreeLoaderService.logger.error("No properties column found for '%s'", columnName);
-					throw new IOException("Invalid column specification");
+					String errMessage = "No properties column found for '" + columnName + "'";
+					CSVTreeLoaderService.logger.error(errMessage);
+					throw new IOException("Invalid column specification: "+errMessage);
 				}
 			} catch (JsonProcessingException e) {
 				System.out.println("Failed to parse properties column '" + columnContent + "' as JSON: " + e);
@@ -326,14 +331,30 @@ class CSVTreeBuilder {
 				e.printStackTrace();
 			}
 		}
+
+		private void setStringProperty(Node node, String key, String value) {
+			if (value != null) {
+				if (value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
+					value = value.substring(1, value.length() - 1);
+				}
+				node.setProperty(key, value);
+			}
+		}
 		
 		protected Node findOrMakeNode(String propertyValue, Map<String, String> record) {
 			Node node = (parentBuilder != null) ? parentBuilder.findChild(column.property, propertyValue) : null;
+			boolean shouldMerge = !mergedChildren.contains(propertyValue);
 			if (node == null) {
 				node = db.createNode(column.label);
-				node.setProperty(column.property, propertyValue);
+				setStringProperty(node, column.property, propertyValue);
+				if (parentBuilder != null) {
+					parentBuilder.addChild(node, propertyValue);
+				}
+				shouldMerge = true;
+			}
+			if (shouldMerge) {
 				for (ColumnSpec prop : properties) {
-					node.setProperty(prop.property, record.get(prop.name));
+					setStringProperty(node, prop.property, record.get(prop.name));
 				}
 				// Add all properties in the column spec for a multi-property column
 				if (this.column.properties != null) {
@@ -343,9 +364,7 @@ class CSVTreeBuilder {
 				if (this.propertiesColumn != null) {
 					addPropertiesColumnToNode(node, record, this.propertiesColumn);
 				}
-				if (parentBuilder != null) {
-					parentBuilder.currentNode.createRelationshipTo(node, parentBuilder.column.child);
-				}
+				mergedChildren.add(propertyValue);
 			}
 			return node;
 		}
