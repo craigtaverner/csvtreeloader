@@ -32,7 +32,9 @@ public class ACollections {
 		private static final long serialVersionUID = 3523139348235658034L;
 
 		public ArrayList(T[] objects) {
-			Collections.addAll(this, objects);
+			if (objects != null) {
+				Collections.addAll(this, objects);
+			}
 		}
 
 		public ArrayList(Iterable<T> objects) {

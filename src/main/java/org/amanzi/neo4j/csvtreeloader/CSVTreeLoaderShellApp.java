@@ -75,15 +75,15 @@ public class CSVTreeLoaderShellApp extends AbstractApp {
 		out.println(String.format("Infile %s quoted %s batch-size %d", name(inputFileName), quotes, batchSize));
 		PrintStream shellOutput = new PrintStream(new ShellOutputStream(out));
 		try {
-			CSVTreeBuilder builder = new CSVTreeBuilder(inputFileName, columnHeaders,
-					leafProperties, leafPropertiesColumn, this.getServer().getDb());
+			CSVTreeBuilder builder = new CSVTreeBuilder(inputFileName, columnHeaders, null, leafProperties,
+					leafPropertiesColumn, this.getServer().getDb());
 			builder.setPage(skip, limit);
 			if (debug)
 				builder.setLogger(shellOutput);
 			HashMap<String, Object> response = new HashMap<String, Object>();
 			response.put("count", builder.read());
 			if (debug)
-				builder.dumpTrees(10);
+				builder.dumpAllTrees(10);
 		} catch (IOException e) {
 			out.println("Error importing " + inputFileName + ": " + e);
 			e.printStackTrace(shellOutput);

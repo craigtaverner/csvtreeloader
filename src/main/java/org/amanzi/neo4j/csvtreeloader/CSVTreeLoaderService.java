@@ -2,7 +2,8 @@ package org.amanzi.neo4j.csvtreeloader;
 
 import org.codehaus.jackson.map.ObjectMapper;
 import org.neo4j.graphdb.GraphDatabaseService;
-import org.neo4j.server.logging.Logger;
+//import org.neo4j.server.logging.Logger;
+
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -14,6 +15,7 @@ import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.List;
 import java.util.HashMap;
+import java.util.logging.Logger;
 
 /**
  * It is common that CSV files have records that duplicate the values in some
@@ -58,7 +60,7 @@ import java.util.HashMap;
 @Path("/service")
 public class CSVTreeLoaderService {
 
-	public static final Logger logger = Logger.getLogger(CSVTreeLoaderService.class);
+	public static final Logger logger = Logger.getLogger(CSVTreeLoaderService.class.toString());
 	
 	public static boolean verbose = false;
 
@@ -92,6 +94,7 @@ public class CSVTreeLoaderService {
 	@Produces("application/json")
 	public Response importCSV(@QueryParam("path") String path,
 			@QueryParam(value = "header") List<String> headers,
+			@QueryParam(value = "tree") List<String> trees,
 			@QueryParam(value = "leafProperty") List<String> leafProperties,
 			@QueryParam(value = "leafProperties") String leafPropertiesColumn,
 			@QueryParam(value = "skip") Long skip,
@@ -99,17 +102,17 @@ public class CSVTreeLoaderService {
 			@QueryParam(value = "debug") Boolean debug,
 			@Context GraphDatabaseService db) {
 		try {
-			logger.info("Processing 'loadcsvtree' request: path=%s", path);
+			logger.info("Processing 'loadcsvtree' request: path=" + path);
 			if (debug == null) debug = false;
-			CSVTreeBuilder builder = new CSVTreeBuilder(path, headers, leafProperties, leafPropertiesColumn, db);
+			CSVTreeBuilder builder = new CSVTreeBuilder(path, headers, trees, leafProperties, leafPropertiesColumn, db);
 			builder.setPage(skip, limit);
 			if (debug) builder.setLogger(System.out);
 			HashMap<String, Object> response = new HashMap<String, Object>();
 			response.put("count", builder.read());
-			if (debug) builder.dumpTrees(10);
+			if (debug) builder.dumpAllTrees(10);
 			return Response.ok().entity(new ObjectMapper().writeValueAsString(response)).build();
 		} catch (IOException e) {
-			logger.error("Error processing 'loadcsvtree' request: path=%s: %s", path, e.getMessage());
+			logger.severe("Error processing 'loadcsvtree' request: path=" + path + ": " + e.getMessage());
 			return Response.status(404).entity(e.getMessage()).build();
 		}
 	}
