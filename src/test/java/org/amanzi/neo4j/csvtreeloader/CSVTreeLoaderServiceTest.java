@@ -43,6 +43,15 @@ public class CSVTreeLoaderServiceTest {
 	public void tearDown() throws Exception {
 		db.shutdown();
 	}
+	
+	@Test
+	public void shouldGetValidInfo() throws IOException {
+		Response response = service.info(true,db);
+		System.out.println("Got Import response: " + response);
+		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
+		String version = tree.get("version").asText();
+		assertTrue("Version should be valid string", version.length() >= 5);
+	}
 
 	private String[] makeSampleCSV(String filename) throws IOException {
 		String[] sample = new String[] {
@@ -163,14 +172,16 @@ public class CSVTreeLoaderServiceTest {
 	 * @param deviceid
 	 * @param day
 	 * @param times
+	 * @param child 
 	 * @param engine
 	 */
-	private void runEventMatchCheck(String deviceid, String day, String[] times, ExecutionEngine engine) {
+	private void runEventMatchCheck(String deviceid, String day, String[] times, RelationshipType child,
+			ExecutionEngine engine) {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> parameters = MapUtils.putAll(
 				new HashMap<String, Object>(), new String[] { "deviceid", deviceid, "day", day }
 		);
-		String query = "MATCH (n:DeviceID {deviceid: {deviceid}})-[:child]->(d:EventDay {day: {day}})-[:child]->(e:Event) "
+		String query = "MATCH (n:DeviceID {deviceid: {deviceid}})-[:"+child+"]->(d:EventDay {day: {day}})-[:"+child+"]->(e:Event) "
 				+ "RETURN n.deviceid as deviceid, e.time as time ORDER BY time ASC";
 		System.out.println(query);
 		ResourceIterator<Object> resultIterator = engine.execute(query, parameters).columnAs("time");
@@ -201,7 +212,7 @@ public class CSVTreeLoaderServiceTest {
 	
 	@Test
 	public void shouldBuildCorrectBuildersWithTreeSpec() throws IOException {
-		buildAndTestWith(new String[] { "DeviceID-child->EventDay-child->Event" }, "tree0");
+		buildAndTestWith(new String[] { "DeviceID-childx->EventDay-childx->Event" }, "tree0");
 	}
 	
 	@Test
@@ -265,6 +276,11 @@ public class CSVTreeLoaderServiceTest {
 			if (treeSpecs == null || treeSpecs.length == 1) {
 				// Now test that there are never duplicate date nodes, and that
 				// days counts are correct
+				RelationshipType child = treeNodes.get(0).childRel;
+				if (treeSpecs != null) {
+					assertTrue("Spec should contain correct relationship type",
+							treeSpecs[0].contains("-" + child + "-"));
+				}
 				HashMap<String, Integer> expectedDays = new HashMap<String, Integer>();
 				expectedDays.put("ABC", 3);
 				expectedDays.put("ABX", 2);
@@ -272,9 +288,9 @@ public class CSVTreeLoaderServiceTest {
 
 				// Now test that the specific deviceid and date has the correct
 				// number of leaf nodes
-				runEventMatchCheck("ABX", "2014-03-20", new String[] { "2014-03-20T12:30:00" }, engine);
+				runEventMatchCheck("ABX", "2014-03-20", new String[] { "2014-03-20T12:30:00" }, child, engine);
 				runEventMatchCheck("ABC", "2014-03-20", new String[] { "2014-03-20T12:00:00", "2014-03-20T12:30:00",
-						"2014-03-20T12:45:00" }, engine);
+						"2014-03-20T12:45:00" }, child, engine);
 			}
 
 			tx.success();

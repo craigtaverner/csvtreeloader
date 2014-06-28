@@ -14,6 +14,7 @@ import org.neo4j.server.rest.RestRequest;
 import java.io.IOException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class CSVTreeLoaderServiceFunctionalTest {
 
@@ -21,6 +22,24 @@ public class CSVTreeLoaderServiceFunctionalTest {
 	public static final String MOUNT_POINT = "/ext";
 	private ObjectMapper objectMapper = new ObjectMapper();
 
+	@Test
+	public void shouldGetValidInfo() throws IOException {
+		NeoServer server = CommunityServerBuilder.server().onPort(7577)
+				.withThirdPartyJaxRsPackage("org.amanzi.neo4j.csvtreeloader", MOUNT_POINT).build();
+		server.start();
+
+		RestRequest restRequest = new RestRequest(server.baseUri().resolve(MOUNT_POINT), CLIENT);
+		String query = "service/csvtree";
+		JaxRsResponse response = restRequest.get(query);
+		assertEquals(200, response.getStatus());
+		System.out.println("Got Import response: " + response.getEntity());
+		JsonNode tree = objectMapper.readTree(response.getEntity().toString());
+		String version = tree.get("version").asText();
+		assertTrue("Version should be valid string", version.length() >= 5);
+		
+		server.stop();
+	}
+	
 	@Test
 	public void shouldImportFromCSV() throws IOException {
 		NeoServer server = CommunityServerBuilder.server().onPort(7577)

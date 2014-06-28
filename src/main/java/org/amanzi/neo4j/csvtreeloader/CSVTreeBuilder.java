@@ -298,6 +298,9 @@ class CSVTreeBuilder {
 				for (int i = 0; i < level; i++) {
 					prefix += "    ";
 				}
+				if (builder.parentBuilder != null) {
+					prefix += "-[:" + builder.parentBuilder.childRel.toString() + "]->";
+				}
 				Iterator<Label> labelIterator = node.getLabels().iterator();
 				String label = labelIterator.hasNext() ? labelIterator.next().name() : "Node";
 				out.println(prefix + label + "[" + node.getId() + "]" + ": "

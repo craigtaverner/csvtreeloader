@@ -1,8 +1,13 @@
 package org.amanzi.neo4j.csvtreeloader;
 
 import org.codehaus.jackson.map.ObjectMapper;
+import org.neo4j.cypher.javacompat.ExecutionEngine;
+import org.neo4j.cypher.javacompat.ExecutionResult;
 import org.neo4j.graphdb.GraphDatabaseService;
 //import org.neo4j.server.logging.Logger;
+
+
+
 
 
 import javax.ws.rs.GET;
@@ -15,6 +20,7 @@ import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.List;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
@@ -113,6 +119,28 @@ public class CSVTreeLoaderService {
 			return Response.ok().entity(new ObjectMapper().writeValueAsString(response)).build();
 		} catch (IOException e) {
 			logger.severe("Error processing 'loadcsvtree' request: path=" + path + ": " + e.getMessage());
+			return Response.status(404).entity(e.getMessage()).build();
+		}
+	}
+
+	@GET
+	@Path("/csvtree")
+	@Produces("application/json")
+	public Response info(@QueryParam(value = "debug") Boolean debug,
+			@Context GraphDatabaseService db) {
+		try {
+			logger.info("Processing 'loadcsvtree_version' request");
+			if (debug == null) debug = false;
+			HashMap<String, Object> response = new HashMap<String, Object>();
+			response.put("version", "0.0.4");
+			ExecutionEngine engine = new ExecutionEngine(db);
+			ExecutionResult result = engine.execute("MATCH (g:DeviceGroup)-->(d:Device) RETURN g.name as Group, count(d) as Devices");
+			for (Map<String, Object> record : result) {
+				response.put(record.get("Group").toString(), record.get("Devices"));
+			}
+			return Response.ok().entity(new ObjectMapper().writeValueAsString(response)).build();
+		} catch (IOException e) {
+			logger.severe("Error processing 'loadcsvtree_version' request: " + e.getMessage());
 			return Response.status(404).entity(e.getMessage()).build();
 		}
 	}
