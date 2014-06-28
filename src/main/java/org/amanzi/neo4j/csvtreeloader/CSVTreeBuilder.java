@@ -122,6 +122,11 @@ class CSVTreeBuilder {
 
 	private void initializeColumns(List<String> columnHeaders, List<String> trees, List<String> leafProperties,
 			String leafPropertiesColumn, GraphDatabaseService db) throws UnsupportedEncodingException {
+		if (columnHeaders.size() == 0) {
+			for (String header : csvReader.getHeaders()) {
+				columnHeaders.add(header);
+			}
+		}
 		this.db = db;
 		this.engine = new ExecutionEngine(db);
 		for (String columnHeader : columnHeaders) {

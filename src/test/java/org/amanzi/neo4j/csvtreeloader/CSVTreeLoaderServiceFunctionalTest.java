@@ -56,10 +56,25 @@ public class CSVTreeLoaderServiceFunctionalTest {
 		server.stop();
 	}
 
+	@Test
+	public void shouldManageInvalidRequests() throws IOException {
+		NeoServer server = CommunityServerBuilder.server().onPort(7577)
+				.withThirdPartyJaxRsPackage("org.amanzi.neo4j.csvtreeloader", MOUNT_POINT).build();
+		server.start();
+
+		RestRequest restRequest = new RestRequest(server.baseUri().resolve(MOUNT_POINT), CLIENT);
+		importFromCSV(restRequest, null, null, null, null, 404, 0);
+		importFromCSV(restRequest, "samples/353333333333333.csv", null, null, null, 200, 122);
+		server.stop();		
+	}
+
 	private void importFromCSV(RestRequest restRequest, String path, String[] columnHeaders, String[] leafProperties,
 			String leafPropertiesColumn, int rc, int records) throws JsonProcessingException, IOException {
 		System.out.println("Running CSV Import from: " + path);
-		String query = "service/loadcsvtree?skip=0&limit=1000&path=" + path;
+		String query = "service/loadcsvtree?skip=0&limit=1000";
+		if (path != null) {
+			query += "&path=" + path;
+		}
 		if (columnHeaders != null) {
 			query += "&" + ACollections.join(columnHeaders, "&header=");
 		}
@@ -78,5 +93,4 @@ public class CSVTreeLoaderServiceFunctionalTest {
 			assertEquals(records, count);
 		}
 	}
-
 }

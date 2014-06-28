@@ -30,6 +30,10 @@ class CSVReader {
 			this.headerMap.put(head, this.headerMap.size());
 		}
 	}
+	
+	public String[] getHeaders() {
+		return this.headers;
+	}
 
 	public static String selectSeparator(String line) {
 		int bestLen = 0;

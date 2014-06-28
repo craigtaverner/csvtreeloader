@@ -110,6 +110,7 @@ public class CSVTreeLoaderService {
 		try {
 			logger.info("Processing 'loadcsvtree' request: path=" + path);
 			if (debug == null) debug = false;
+			if (path == null) throw new IOException("No CSV path specified");
 			CSVTreeBuilder builder = new CSVTreeBuilder(path, headers, trees, leafProperties, leafPropertiesColumn, db);
 			builder.setPage(skip, limit);
 			if (debug) builder.setLogger(System.out);
