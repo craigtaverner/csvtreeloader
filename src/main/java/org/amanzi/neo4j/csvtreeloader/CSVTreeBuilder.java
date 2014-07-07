@@ -606,8 +606,7 @@ class CSVTreeBuilder {
 					cachedRoots.put(node.getProperty(column.property).toString(), node);
 				}
 				tx.success();
-				System.out.println("Cached " + cachedRoots.size() + " existing tree roots with Label '" + this.column.label
-						+ "'");
+				debug("Cached " + cachedRoots.size() + " existing tree roots with Label '" + this.column.label + "'");
 			}
 		}
 
