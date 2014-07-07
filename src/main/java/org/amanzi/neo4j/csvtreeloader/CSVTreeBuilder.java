@@ -88,9 +88,10 @@ class CSVTreeBuilder {
 	private ArrayList<ColumnSpec> columns = new ArrayList<ColumnSpec>();
 	Map<String, ColumnSpec> columnMap = new HashMap<String, ColumnSpec>();
 	Map<String, TreeStructure> treeStructures = new HashMap<String, TreeStructure>();
-	private PrintStream out;
+	private static PrintStream out;
 	private GraphDatabaseService db;
 	private ExecutionEngine engine;
+	public boolean debug = false;
 
 	public CSVTreeBuilder(String file, String[] columnHeaderArray, String[] treesArray, List<String> leafProperties,
 			String leafPropertiesColumn, GraphDatabaseService db) throws IOException {
@@ -157,6 +158,9 @@ class CSVTreeBuilder {
 			for(TreeStructure other:treeStructures.values()){
 				tree.addRoots(other.getRootBuilder());
 			}
+			if(debug) {
+				
+			}
 		}
 	}
 
@@ -170,17 +174,23 @@ class CSVTreeBuilder {
 	}
 
 	public void setLogger(PrintStream out) {
-		this.out = out;
+		CSVTreeBuilder.out = out;
 	}
 
 	public void dumpAllTrees(int maxRoots) {
 		if (out != null) {
 			for (TreeStructure tree : treeStructures.values()) {
-				tree.dumpTrees(this.out, tree.name, tree.builders, maxRoots);
+				tree.dumpTrees(out, tree.name, tree.builders, maxRoots);
 			}
 		}
 	}
 
+	private static void debug(String line) {
+		if (out != null) {
+			out.println(line);
+		}
+	}
+	
 	private long logIf(long start, long prevLog, long count) {
 		if (out != null) {
 			long now = System.currentTimeMillis();
@@ -207,6 +217,7 @@ class CSVTreeBuilder {
 			Transaction tx = db.beginTx();
 			try {
 				while ((record = csvReader.readRecord()) != null) {
+					debug("Adding record: " + record);
 					if (limit > 0 && count >= (skip + limit)) {
 						break;
 					}
@@ -280,10 +291,10 @@ class CSVTreeBuilder {
 		}
 		public void initializeWith(String treeSpec, Map<String,ColumnSpec> columns, List<String> leafProperties, String leafPropertiesColumn) throws UnsupportedEncodingException {
 			TreeNodeBuilder parentBuilder = null;
-			for (String columnSpec : treeSpec.split("->")) {
+			for (String columnSpec : URLDecoder.decode(treeSpec,"US-ASCII").split("->")) {
 				String[] cs = columnSpec.split("-");
 				String columnLabel = cs[0];
-				RelationshipType child = cs.length > 1 ? DynamicRelationshipType.withName(URLDecoder.decode(cs[1],"US-ASCII")) : DEFAULT_CHILD;
+				RelationshipType child = cs.length > 1 ? DynamicRelationshipType.withName(cs[1]) : DEFAULT_CHILD;
 				ColumnSpec column = columns.get(columnLabel);
 				if (column == null) {
 					throw new RuntimeException("Invalid tree '" + name + "': no such column '" + columnLabel + "'");
@@ -326,7 +337,7 @@ class CSVTreeBuilder {
 				if (maxRoots == 0) {
 					maxRoots = knownRoots;
 				}
-				System.out.println("Displaying " + tree + " graphs for " + (maxRoots >= knownRoots ? "all" : maxRoots)
+				out.println("Displaying " + tree + " graphs for " + (maxRoots >= knownRoots ? "all" : maxRoots)
 						+ " of " + knownRoots + " known roots");
 				for (Entry<String, Node> entry : rootBuilder.cachedRoots.entrySet()) {
 					if (count > maxRoots) {
@@ -360,6 +371,10 @@ class CSVTreeBuilder {
 
 		private String field(String[] headerSpec, int index, String defaultValue) throws UnsupportedEncodingException {
 			return (headerSpec.length > index && headerSpec[index].length() > 0) ? URLDecoder.decode(headerSpec[index],"US-ASCII") : defaultValue;
+		}
+		
+		public String toString() {
+			return "ColumnSpec[" + name + "]: property:" + property + ", label:" + label + ", properties:" + properties;
 		}
 	}
 
@@ -418,7 +433,7 @@ class CSVTreeBuilder {
 		protected void considerQuivalentRoot(RootTreeNodeBuilder root) {
 			if (this != root && root.getKey().equals(this.getKey())) {
 				this.equivalentRootBuilder = root;
-				System.out.println("TreeNodeBuilder[" + this + "]: equivalent to root builder '" + root + "'");
+				debug("TreeNodeBuilder[" + this + "]: equivalent to root builder '" + root + "'");
 			}
 		}
 		
@@ -506,15 +521,19 @@ class CSVTreeBuilder {
 				shouldMerge = true;
 			}
 			if (shouldMerge) {
+				debug("Adding properties to node: " + propertyValue);
 				for (ColumnSpec prop : properties) {
+					debug("Adding property column: " + prop);
 					setStringProperty(node, prop.property, record.get(prop.name));
 				}
-				// Add all properties in the column spec for a multi-property column
+				// Add all properties in the column spec for a multi-propert column
 				if (this.column.properties != null) {
+					debug("Adding multi-property column: " + this.column.properties);
 					addPropertiesColumnToNode(node, record, this.column.properties);
 				}
 				// Add all properties in the leaf-specific column spec
 				if (this.propertiesColumn != null) {
+					debug("Adding leaf-property column: " + this.propertiesColumn);
 					addPropertiesColumnToNode(node, record, this.propertiesColumn);
 				}
 				mergedChildren.add(propertyValue);
